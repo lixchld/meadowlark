@@ -29,6 +29,29 @@ app.get('/about', function(req, res){
     });
 });
 
+app.get('/greeting', function(req, res){
+    res.render('about', {
+        message: 'welcome',
+        style:req.query.style,
+        userid: req.cookies.userid,
+        username: req.session.username,
+    });
+});
+
+app.get('/no-layout', function(req, res){
+    res.render('no-layout', {layout: null});
+});
+
+app.get('/custom-layout', function(req, res){
+    res.render('custom-layout', {layout:'custom'});
+});
+
+app.get('/test', function(req, res){
+    res.type('text/plain');
+    res.send('this is a text');
+});
+
+
 app.use( function(req, res, next){
     //res.type('text/plain');
     //res.status(404);
