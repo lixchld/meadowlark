@@ -11,19 +11,36 @@ var handlebars = require('express-handlebars').create( {
 } );
 var fortune = require('./lib/fortune.js');
 
+var credential = require('./credential.js');
+
 var app = express();
 app.engine( 'handlebars', handlebars.engine);
 app.set('view engine', 'handlebars');
 app.set( 'port', process.env.PORT || 3000 );
 
+app.use( require('cookie-parser')(credential.cookieSecret));
+
+app.use( require('express-session')({
+    resave: false,
+    saveUninitialized: false,
+    secret: credential.cookieSecret,
+}) );
+
 app.use(express.static(__dirname + '/public'));
 
+app.use( require('body-parser')() );
+
 app.use(function(req, res, next){
-    res.locals.showTests = app.get('env') !== 'production' && req.query.test === '1';
+    res.locals.flash = req.session.flash;
+    delete req.session.flash;
     next();
 });
 
-app.use( require('body-parser')() );
+app.use(function(req, res, next){
+    res.locals.showTests = app.get('env') !== 'production' &&
+         req.query.test === '1';
+    next();
+});
 
 app.get('/', function(req, res){
     //res.type('text/plain');
@@ -69,6 +86,55 @@ app.get('/thank-you', function(req, res){
 app.get('/newsletter', function(req, res){
 
     res.render('newsletter', {csrf: 'CSRF token goes here'});
+});
+
+// for now, we're mocking NewsletterSignup:
+function NewsletterSignup(){
+}
+NewsletterSignup.prototype.save = function(cb){
+	cb();
+};
+
+app.post('/newsletter', function(req, res){
+    var name = req.body.name || '', email = req.body.email || '';
+
+    if( !email.match(VALID_EMAIL_REGEX)){
+        if(req.xhr) return res.json( { error: 'Invalid anme email address.'});
+        req.session.flash = {
+            type: 'danger',
+            intro: 'Validation error!',
+            message: 'The email adress you entered was not valid.',
+        };
+        return res.redirect(303, '/newsletter/archive');
+    }
+
+    new NewsletterSignup({
+        name: name,
+        email: email,
+    }).save( function(err){
+        if(err){
+            if(req.xhr) return res.json( {error: 'Database error.'});
+            req.session.flash = {
+                type: 'danger',
+                intro: 'Database error!',
+                message: 'There was a database error; please try again later.',
+            };
+            return res.redirect(303, '/newsletter/archive');
+        }
+
+        if( req.xhr) return res.json( {sucess: true});
+        req.session.flash = {
+            type: 'success',
+            intro: 'Thank you',
+            message: 'You have now been signed up for the newsletter.',
+        };
+
+        return res.redirect(303, '/newsletter/archive');
+    });
+})
+
+app.get('/newsletter/archive', function(req, res){
+	res.render('newsletter/archive');
 });
 
 app.post('/process', function(req, res){
